@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LU | K-Means Clustering Masterclass</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Montserrat:wght@800;900&display=swap');
+        
+        :root {
+            --lu-gold: #B5A26C;
+            --obsidian: #020617;
+            --charcoal: #0f172a;
+            --neon-blue: #3b82f6;
+            --emerald: #10b981;
+            --error-red: #ef4444;
+            --purple: #a855f7;
+            
+            /* Cluster Colors */
+            --c0: #3b82f6; /* Blue */
+            --c1: #ef4444; /* Red */
+            --c2: #10b981; /* Green */
+            --c3: #f59e0b; /* Orange */
+            --c4: #a855f7; /* Purple */
+            --c5: #ec4899; /* Pink */
+            --c6: #06b6d4; /* Cyan */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--obsidian);
+            color: #e2e8f0;
+            overflow-x: hidden;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body::before {
+            content:'';
+            position:fixed;
+            inset:0;
+            background-image:
+                radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59, 130, 246, 0.04) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 80% at 80% 90%, rgba(181, 162, 108, 0.04) 0%, transparent 60%);
+            pointer-events:none;
+            z-index:0;
+        }
+
+        .font-brand { font-family: 'Montserrat', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        .glass {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        }
+
+        /* Metric Cards */
+        .metric-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: left;
+            transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        .metric-card:hover { 
+            transform: translateY(-4px); 
+            background: rgba(255,255,255,0.05);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            border-color: rgba(255,255,255,0.15);
+        }
+        .click-hint {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            font-size: 10px;
+            color: #64748b;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .metric-card:hover .click-hint { opacity: 1; }
+
+        /* Step Buttons */
+        .step-btn {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-radius: 10px;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.02);
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+        }
+        .step-btn:not(:disabled):hover { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+        .step-btn.active {
+            background: var(--neon-blue);
+            color: white;
+            border-color: var(--neon-blue);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+            transform: scale(1.02);
+        }
+        .step-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .step-number {
+            display: flex; align-items: center; justify-content: center;
+            width: 24px; height: 24px; border-radius: 50%;
+            background: rgba(0,0,0,0.3); font-size: 0.7rem; flex-shrink: 0;
+        }
+
+        .slider-custom {
+            accent-color: var(--lu-gold);
+            width: 100%; height: 6px; border-radius: 4px;
+            background: rgba(255,255,255,0.1); outline: none;
+            -webkit-appearance: none; transition: all 0.2s; cursor: pointer;
+        }
+        .slider-custom::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+            background: var(--lu-gold); cursor: pointer;
+            box-shadow: 0 0 10px rgba(181, 162, 108, 0.5);
+        }
+
+        /* Floating HUD */
+        #math-hud {
+            position: absolute;
+            top: 20px; right: 20px;
+            background: rgba(10, 15, 25, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--lu-gold);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            z-index: 100;
+            width: 260px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+        #math-hud.visible { opacity: 1; transform: translateY(0); }
+
+        /* Custom Toggles */
+        .toggle-btn {
+            padding: 8px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            border-radius: 8px;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 1px solid transparent;
+            text-align: center;
+        }
+        .toggle-btn.active {
+            background: var(--lu-gold);
+            color: var(--obsidian);
+            box-shadow: 0 0 15px rgba(181, 162, 108, 0.4);
+        }
+        .toggle-btn:not(.active) {
+            background: rgba(255,255,255,0.05);
+            color: #94a3b8;
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        /* D3 Styles */
+        .axis-label { font-size: 10px; font-weight: 900; fill: #64748b; text-transform: uppercase; letter-spacing: 0.1em; }
+        .data-point { transition: fill 0.3s, stroke 0.3s, r 0.2s; stroke: rgba(255,255,255,0.2); stroke-width: 1; cursor: crosshair; }
+        .data-point.unassigned { fill: #475569; }
+        .data-point:hover { r: 8; stroke: white; stroke-width: 2; z-index: 50; }
+        
+        .centroid-mark { filter: drop-shadow(0 0 8px rgba(255,255,255,0.5)); stroke: white; stroke-width: 1.5; transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        
+        .dist-line { stroke-width: 1.5; stroke-dasharray: 4,4; opacity: 0.6; }
+        .dist-line-winner { stroke-width: 2.5; stroke-dasharray: none; opacity: 1; }
+
+        /* Cluster Colors */
+        .c0 { fill: var(--c0); stroke: var(--c0); }
+        .c1 { fill: var(--c1); stroke: var(--c1); }
+        .c2 { fill: var(--c2); stroke: var(--c2); }
+        .c3 { fill: var(--c3); stroke: var(--c3); }
+        .c4 { fill: var(--c4); stroke: var(--c4); }
+        .c5 { fill: var(--c5); stroke: var(--c5); }
+        .c6 { fill: var(--c6); stroke: var(--c6); }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+
+    <!-- Educational Modal -->
+    <div id="metric-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-black/70 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-lg w-full shadow-2xl transform scale-95 transition-transform duration-300" id="modal-content-box">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 id="modal-title" class="text-2xl font-black text-white uppercase tracking-wider">Concept</h2>
+                    <p class="text-xs text-slate-400 font-bold tracking-widest uppercase mt-1">Algorithm Deep Dive</p>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6 text-sm text-slate-300">
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                    <strong class="flex items-center gap-2 text-blue-400 uppercase text-[10px] tracking-widest mb-2">
+                        <i data-lucide="book-open" class="w-3 h-3"></i> Definition
+                    </strong>
+                    <p id="modal-def" class="text-slate-200 leading-relaxed"></p>
+                </div>
+                
+                <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                    <strong class="flex items-center gap-2 text-purple-400 uppercase text-[10px] tracking-widest mb-2">
+                        <i data-lucide="function-square" class="w-3 h-3"></i> The Math
+                    </strong>
+                    <div id="modal-form" class="font-mono text-center text-white font-bold bg-black/40 py-3 px-2 rounded-lg text-xs break-all flex flex-col items-center justify-center min-h-[50px] gap-2"></div>
+                </div>
+
+                <div class="bg-blue-900/20 p-4 rounded-xl border border-blue-500/20">
+                    <strong class="flex items-center gap-2 text-[--lu-gold] uppercase text-[10px] tracking-widest mb-2">
+                        <i data-lucide="lightbulb" class="w-3 h-3"></i> Key Insight
+                    </strong>
+                    <p id="modal-interp" class="text-blue-100 italic text-xs leading-relaxed"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-[1700px] w-full mx-auto flex flex-col h-full relative z-10">
+        
+        <!-- HEADER -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-white/5 pb-4 flex-shrink-0">
+            <div class="flex items-center gap-4">
+                <div class="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
+                    <i data-lucide="focus" class="text-blue-400 w-6 h-6"></i>
+                </div>
+                <div>
+                    <span class="font-brand text-[10px] tracking-[0.4em] text-[--lu-gold] uppercase block mb-1">DSCI 356000 | Lindenwood University</span>
+                    <h1 class="text-2xl md:text-3xl font-brand font-black text-white tracking-tighter uppercase leading-none">
+                        K-Means Clustering <span class="text-transparent bg-clip-text bg-gradient-to-r from-[--lu-gold] to-white/40">Masterclass</span>
+                    </h1>
+                    <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Instructor: Mr. Kalauni • ISLR Step-by-Step Simulation</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-slate-800 flex-wrap justify-end">
+                <button onclick="generateData('blobs')" id="btn-data-blobs" class="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all bg-white/10 text-white border border-blue-500/30">
+                    Globular (Blobs)
+                </button>
+                <button onclick="generateData('moons')" id="btn-data-moons" class="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all text-slate-400 hover:bg-white/5">
+                    Crescent (Moons)
+                </button>
+                <button onclick="generateData('circles')" id="btn-data-circles" class="px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all text-slate-400 hover:bg-white/5">
+                    Concentric Circles
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+            
+            <!-- LEFT PANEL: CONTROLS & THEORY -->
+            <aside class="lg:col-span-3 flex flex-col gap-4 overflow-y-auto pr-2">
+                
+                <!-- Hyperparameters & Initialization -->
+                <div class="glass p-6 rounded-[2rem]">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <i data-lucide="sliders" class="w-4 h-4 text-[--lu-gold]"></i> 1. Setup & Init
+                        </h3>
+                    </div>
+                    
+                    <div class="mb-5">
+                        <div class="flex justify-between text-xs font-bold text-slate-300 mb-2">
+                            <span>Number of Clusters (K)</span>
+                            <span id="k-val" class="font-mono text-[--lu-gold] text-xl">3</span>
+                        </div>
+                        <input type="range" id="k-slider" min="1" max="7" step="1" value="3" class="slider-custom" oninput="updateK(this.value)">
+                    </div>
+
+                    <div class="mb-2">
+                        <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">
+                            <span>Init Method</span>
+                        </div>
+                        <div class="flex flex-col xl:flex-row gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-slate-800">
+                            <button onclick="setInitMode('islr')" id="btn-init-islr" class="toggle-btn active flex-1">ISLR (Colors)</button>
+                            <button onclick="setInitMode('forgy')" id="btn-init-forgy" class="toggle-btn flex-1">Random Pts</button>
+                            <button onclick="setInitMode('manual')" id="btn-init-manual" class="toggle-btn flex-1">Manual Click</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transformation Pipeline -->
+                <div class="glass p-6 rounded-[2rem]">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                        <i data-lucide="play-circle" class="w-4 h-4 text-[--neon-blue]"></i> 2. Lloyd's Pipeline
+                    </h3>
+                    
+                    <div class="space-y-3 mb-5">
+                        <button onclick="stepInit()" id="btn-step1" class="step-btn">
+                            <span class="step-number">1</span> Init Clusters
+                        </button>
+                        <button onclick="stepUpdate()" id="btn-step2" class="step-btn" disabled>
+                            <span class="step-number">2a</span> Compute Centroids
+                        </button>
+                        <button onclick="stepAssign()" id="btn-step3" class="step-btn" disabled>
+                            <span class="step-number">2b</span> Assign Points
+                        </button>
+                    </div>
+
+                    <button onclick="autoRun()" id="btn-autorun" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center justify-center gap-2">
+                        <i data-lucide="fast-forward" class="w-4 h-4"></i> Auto-Run to Convergence
+                    </button>
+                </div>
+
+                <!-- Live Metrics -->
+                <div class="glass p-6 rounded-[2rem] flex-1 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4 text-[--emerald]"></i> 3. Analytics
+                        </h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 mt-auto">
+                        <div class="metric-card" onclick="openModal('wcss')">
+                            <span class="click-hint"><i data-lucide="zoom-in" class="w-3 h-3"></i></span>
+                            <div class="text-[9px] text-slate-400 font-bold uppercase mb-1">Inertia (WCSS)</div>
+                            <div class="text-2xl font-mono font-bold text-white" id="wcss-val">--</div>
+                            <p class="text-[8px] text-slate-500 mt-1 uppercase tracking-widest">Within-Cluster Sum of Squares</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="metric-card" onclick="openModal('lloyd')">
+                                <span class="click-hint"><i data-lucide="zoom-in" class="w-3 h-3"></i></span>
+                                <div class="text-[9px] text-slate-400 font-bold uppercase mb-1">Iterations</div>
+                                <div class="text-xl font-mono font-bold text-[--lu-gold]" id="iter-val">0</div>
+                            </div>
+                            <div class="metric-card" onclick="openModal('fail')">
+                                <span class="click-hint"><i data-lucide="zoom-in" class="w-3 h-3"></i></span>
+                                <div class="text-[9px] text-slate-400 font-bold uppercase mb-1">Converged</div>
+                                <div class="text-xl font-mono font-bold text-[--error-red]" id="conv-val">No</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- MAIN PANEL: PLOTLY VISUALIZATION -->
+            <div class="lg:col-span-9 flex flex-col gap-4">
+                <div class="glass p-6 rounded-[2rem] flex-1 relative flex flex-col shadow-2xl border-white/10">
+                    <div class="flex justify-between items-center z-10 mb-2">
+                        <h3 id="plot-title" class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <i data-lucide="target" class="w-4 h-4 text-[--lu-gold]"></i> Feature Space
+                        </h3>
+                        <div id="status-badge" class="text-[9px] font-bold uppercase tracking-widest bg-slate-800 text-slate-400 px-3 py-1.5 rounded-lg border border-white/5">
+                            Status: Idle
+                        </div>
+                    </div>
+                    
+                    <div id="plot-container" class="w-full flex-1 relative bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-inner mt-2 cursor-crosshair">
+                        
+                        <!-- Floating HUD for Distance Math -->
+                        <div id="math-hud">
+                            <div class="text-[--lu-gold] font-bold uppercase tracking-widest border-b border-white/10 pb-2 mb-3 flex items-center gap-2 font-sans text-[11px]">
+                                <i data-lucide="ruler" class="w-4 h-4"></i> Distance Calculation
+                            </div>
+                            <div class="text-[9px] text-slate-400 mb-2">Point: <span id="hud-pt" class="font-mono text-white"></span></div>
+                            <div id="hud-distances" class="space-y-1.5 font-mono text-[10px]">
+                                <!-- Injected dynamically -->
+                            </div>
+                            <div class="text-[8px] text-slate-500 font-mono mt-3 pt-2 border-t border-white/10 italic">
+                                Euclidean Distance = √((x₁-x₂)² + (y₁-y₂)²)
+                            </div>
+                        </div>
+
+                        <svg id="main-svg" class="absolute inset-0 w-full h-full"></svg>
+                    </div>
+                    
+                    <div class="mt-4 p-4 bg-slate-900/60 rounded-2xl border border-slate-800 text-[10px] text-slate-400 leading-relaxed flex gap-4">
+                        <div class="flex-1 border-r border-slate-700 pr-4">
+                            <strong class="text-white block mb-1 text-[11px]"><i data-lucide="mouse-pointer-2" class="w-3 h-3 inline pb-0.5"></i> Step-by-Step Simulation</strong> 
+                            The ISLR initialization randomly assigns colors first, then computes centroids. Watch the wave animation during the 'Assign Points' step as each observation calculates its distance to every centroid!
+                        </div>
+                        <div class="flex-1">
+                            <strong class="text-white block mb-1 text-[11px]">Algorithm Intuition</strong> 
+                            K-Means expects spherical (globular) clusters. Try changing the dataset to 'Moons' or 'Concentric Circles' to see how the algorithm mathematically fails on non-linear shapes!
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // --- EDUCATIONAL CONTENT DICTIONARY ---
+        const educationalInfo = {
+            wcss: {
+                title: "Inertia (WCSS)",
+                def: "Within-Cluster Sum of Squares. It measures how tightly grouped the clusters are by summing the squared distance between each data point and its assigned centroid.",
+                form: "J = \\sum_{k=1}^{K} \\sum_{i \\in C_k} ||x_i - \\mu_k||^2",
+                interp: "A lower inertia means denser clusters. However, Inertia is NOT a normalized metric. It will ALWAYS decrease as you increase K. If K equals the number of data points, Inertia becomes 0. We use the 'Elbow Method' to find the optimal K where the decrease in inertia levels off."
+            },
+            lloyd: {
+                title: "Lloyd's Algorithm Initialization",
+                def: "The textbook ISLR method initializes by randomly assigning a cluster number (color) to every observation. The first step is then computing centroids based on this random noise. Alternatively, 'Forgy' randomly picks K data points to serve as the initial centroids.",
+                form: "1. Compute: \\mu_j := \\frac{\\sum 1\\{c^{(i)}=j\\} x^{(i)}}{\\sum 1\\{c^{(i)}=j\\}} \\\\ 2. Re-assign: c^{(i)} := \\arg\\min_j ||x^{(i)} - \\mu_j||^2",
+                interp: "It is guaranteed to converge to a local minimum, but not necessarily the global minimum. Because the random initial color assignments heavily dictate the final clusters, K-Means is usually run multiple times with different random seeds."
+            },
+            fail: {
+                title: "Assumptions & Failure Modes",
+                def: "K-Means makes strict assumptions about the data: clusters are spherical (isotropic), have similar variance, and roughly similar sizes.",
+                form: "Boundary = Voronoi Tessellation",
+                interp: "Because it relies purely on center-based Euclidean distance, K-Means will draw straight, linear boundaries between clusters. Test this by generating 'Moons' or 'Circles' data; K-Means will cut straight through the continuous shapes because it cannot understand density or connectivity!"
+            }
+        };
+
+        // --- MODAL LOGIC ---
+        window.openModal = function(type) {
+            const info = educationalInfo[type];
+            if(!info) return;
+
+            document.getElementById('modal-title').innerText = info.title;
+            document.getElementById('modal-def').innerText = info.def;
+            document.getElementById('modal-form').innerHTML = `\\[${info.form}\\]`;
+            document.getElementById('modal-interp').innerText = info.interp;
+
+            const modal = document.getElementById('metric-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                document.getElementById('modal-content-box').classList.remove('scale-95');
+                MathJax.typeset();
+            }, 10);
+        }
+
+        window.closeModal = function() {
+            const modal = document.getElementById('metric-modal');
+            modal.classList.add('opacity-0');
+            document.getElementById('modal-content-box').classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 300);
+        }
+        document.getElementById('metric-modal').addEventListener('click', function(e) {
+            if(e.target === this) window.closeModal();
+        });
+
+        // --- GLOBAL ENGINE STATE ---
+        let dataset = [];
+        let centroids = [];
+        let K = 3;
+        let iteration = 0;
+        let state = 'idle'; // idle, manual_picking, initialized, computing, updated, assigning, assigned, converged
+        let initMode = 'islr'; // 'islr', 'forgy', 'manual'
+        
+        let isAutoRunning = false;
+        let autoRunTimer = null;
+        let currentDataType = 'blobs';
+
+        const colorPalette = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#06b6d4'];
+
+        // D3 Setup
+        let svg, pWidth, pHeight;
+        let xScale, yScale;
+        let pointsGroup, linesGroup, centroidsGroup;
+
+        function initD3() {
+            const container = document.getElementById('plot-container');
+            pWidth = container.clientWidth;
+            pHeight = container.clientHeight;
+            const pad = {top: 20, right: 20, bottom: 40, left: 40};
+
+            svg = d3.select("#main-svg");
+            svg.selectAll("*").remove();
+
+            // Invisible Background Rect to ensure all empty space is clickable
+            svg.append("rect")
+               .attr("width", "100%")
+               .attr("height", "100%")
+               .attr("fill", "transparent")
+               .attr("class", "click-capture");
+
+            xScale = d3.scaleLinear().domain([0, 100]).range([pad.left, pWidth - pad.right]);
+            yScale = d3.scaleLinear().domain([0, 100]).range([pHeight - pad.bottom, pad.top]);
+
+            // Axes
+            svg.append("g").attr("transform", `translate(0, ${pHeight - pad.bottom})`).call(d3.axisBottom(xScale).ticks(5).tickFormat("")).attr("class", "axis-label opacity-30");
+            svg.append("g").attr("transform", `translate(${pad.left}, 0)`).call(d3.axisLeft(yScale).ticks(5).tickFormat("")).attr("class", "axis-label opacity-30");
+
+            linesGroup = svg.append("g");
+            pointsGroup = svg.append("g");
+            centroidsGroup = svg.append("g");
+
+            // SVG Click for Manual Placement
+            svg.on('click', function(event) {
+                if (state === 'manual_picking') {
+                    // Check if click was on empty space (not a data point)
+                    const targetTag = event.target.tagName;
+                    if (targetTag === 'svg' || targetTag === 'rect' || event.target.classList.contains('click-capture')) {
+                        if (centroids.length < K) {
+                            const [px, py] = d3.pointer(event);
+                            const x = Math.max(0, Math.min(100, xScale.invert(px)));
+                            const y = Math.max(0, Math.min(100, yScale.invert(py)));
+                            centroids.push({ id: `c${centroids.length}`, x: x, y: y, cIdx: centroids.length });
+                            drawCentroids();
+                            
+                            document.getElementById('status-badge').innerText = `Status: Placed ${centroids.length} of ${K}`;
+                            
+                            if (centroids.length === K) {
+                                state = 'initialized'; // Since centroids are placed manually, next step is assign points
+                                iteration = 1;
+                                updateUIState();
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- DATA GENERATION ---
+        window.generateData = function(type) {
+            if (isAutoRunning) toggleAutoRun(); // Stop animation if running
+            currentDataType = type || currentDataType;
+            
+            // Update Buttons
+            ['blobs', 'moons', 'circles'].forEach(t => {
+                const btn = document.getElementById(`btn-data-${t}`);
+                if (!btn) return;
+                if(t === currentDataType) btn.className = "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all bg-white/10 text-white border border-blue-500/30";
+                else btn.className = "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all text-slate-400 hover:bg-white/5";
+            });
+
+            dataset = [];
+            const n = 300;
+
+            if (currentDataType === 'blobs') {
+                const centers = [{x:25,y:25}, {x:75,y:75}, {x:25,y:75}, {x:75,y:25}];
+                for (let i = 0; i < n; i++) {
+                    const c = centers[Math.floor(Math.random() * centers.length)];
+                    dataset.push({
+                        id: i,
+                        x: Math.max(5, Math.min(95, d3.randomNormal(c.x, 8)())),
+                        y: Math.max(5, Math.min(95, d3.randomNormal(c.y, 8)())),
+                        cluster: null
+                    });
+                }
+            } else if (currentDataType === 'moons') {
+                for (let i = 0; i < n/2; i++) {
+                    const t = Math.random() * Math.PI;
+                    dataset.push({ id: i, x: 50 + 25 * Math.cos(t) + d3.randomNormal(0, 3)(), y: 65 - 25 * Math.sin(t) + d3.randomNormal(0, 3)(), cluster: null });
+                }
+                for (let i = n/2; i < n; i++) {
+                    const t = Math.random() * Math.PI;
+                    dataset.push({ id: i, x: 50 + 25 * Math.cos(t + Math.PI) + 15 + d3.randomNormal(0, 3)(), y: 35 - 25 * Math.sin(t + Math.PI) + 10 + d3.randomNormal(0, 3)(), cluster: null });
+                }
+            } else if (currentDataType === 'circles') {
+                for (let i = 0; i < n/3; i++) {
+                    let r = Math.random() * 10; let theta = Math.random() * 2 * Math.PI;
+                    dataset.push({ id: i, x: 50 + r * Math.cos(theta), y: 50 + r * Math.sin(theta), cluster: null });
+                }
+                for (let i = n/3; i < n; i++) {
+                    let r = 25 + Math.random() * 10; let theta = Math.random() * 2 * Math.PI;
+                    dataset.push({ id: i, x: 50 + r * Math.cos(theta), y: 50 + r * Math.sin(theta), cluster: null });
+                }
+            }
+
+            resetEngine();
+            drawPoints();
+        }
+
+        window.updateK = function(val) {
+            K = parseInt(val);
+            document.getElementById('k-val').innerText = K;
+            if (isAutoRunning) toggleAutoRun();
+            resetEngine();
+            drawPoints();
+        }
+
+        window.setInitMode = function(mode) {
+            initMode = mode;
+            ['islr', 'forgy', 'manual'].forEach(m => {
+                document.getElementById(`btn-init-${m}`).classList.toggle('active', m === mode);
+                document.getElementById(`btn-init-${m}`).classList.toggle('text-slate-500', m !== mode);
+            });
+            if (isAutoRunning) toggleAutoRun();
+            resetEngine();
+            drawPoints();
+        }
+
+        function resetEngine() {
+            iteration = 0;
+            state = 'idle';
+            centroids = [];
+            dataset.forEach(d => d.cluster = null);
+            
+            updateUIState();
+            centroidsGroup.selectAll("*").remove();
+            linesGroup.selectAll("*").remove();
+            
+            document.getElementById('wcss-val').innerText = "--";
+            document.getElementById('iter-val').innerText = "0";
+            
+            const conv = document.getElementById('conv-val');
+            conv.innerText = "No";
+            conv.className = "text-xl font-mono font-bold text-[--error-red]";
+        }
+
+        // --- ALGORITHM STEPS ---
+        
+        window.stepInit = function() {
+            resetEngine();
+            
+            if (initMode === 'islr') {
+                // ISLR: Randomly assign classes first, don't calculate centroids yet (wait for Compute step)
+                dataset.forEach(d => { d.cluster = Math.floor(Math.random() * K); });
+                drawPoints();
+                state = 'assigned'; // Skips to compute centroids based on random colors
+                iteration = 1;
+                updateUIState();
+            } 
+            else if (initMode === 'forgy') {
+                // Forgy: Randomly select K data points as initial centroids
+                const shuffled = [...dataset].sort(() => 0.5 - Math.random());
+                centroids = shuffled.slice(0, K).map((d, i) => ({ id: `c${i}`, x: d.x, y: d.y, cIdx: i }));
+                drawCentroids();
+                state = 'initialized'; // Skips to Assign points based on centroids
+                iteration = 1;
+                updateUIState();
+            }
+            else if (initMode === 'manual') {
+                state = 'manual_picking';
+                updateUIState();
+            }
+        }
+
+        window.stepAssign = function() {
+            if(state === 'assigning') return;
+            state = 'assigning';
+            updateUIState();
+
+            let moved = false;
+            let shuffledIdx = d3.shuffle(d3.range(dataset.length));
+            let ptIdx = 0;
+            let batchSize = isAutoRunning ? 20 : 5;
+
+            function assignNextBatch() {
+                if (ptIdx >= shuffledIdx.length) {
+                    calcWCSS();
+                    state = (!moved && iteration > 1) ? 'converged' : 'assigned';
+                    linesGroup.selectAll("*").transition().duration(500).style("opacity", 0).remove();
+                    updateUIState();
+                    if(isAutoRunning && state !== 'converged') setTimeout(window.stepUpdate, 600);
+                    else if(isAutoRunning) toggleAutoRun();
+                    return;
+                }
+
+                let batch = [];
+                for(let b=0; b < batchSize && ptIdx < shuffledIdx.length; b++, ptIdx++) {
+                    let d = dataset[shuffledIdx[ptIdx]];
+                    batch.push(d);
+                    
+                    let minDist = Infinity;
+                    let bestC = 0;
+                    centroids.forEach(c => {
+                        const distSq = (d.x - c.x)**2 + (d.y - c.y)**2;
+                        if(distSq < minDist) { minDist = distSq; bestC = c.cIdx; }
+                    });
+                    if (d.cluster !== bestC) moved = true;
+                    d.cluster = bestC;
+                }
+
+                // Draw assignment lines to visualize calculation
+                let lines = linesGroup.selectAll(".anim-line").data(batch, d => d.id);
+                lines.enter().append("line")
+                    .attr("class", "anim-line pointer-events-none")
+                    .attr("x1", d => xScale(d.x)).attr("y1", d => yScale(d.y))
+                    .attr("x2", d => {
+                        const c = centroids.find(cen => cen.cIdx === d.cluster);
+                        return c ? xScale(c.x) : xScale(d.x);
+                    })
+                    .attr("y2", d => {
+                        const c = centroids.find(cen => cen.cIdx === d.cluster);
+                        return c ? yScale(c.y) : yScale(d.y);
+                    })
+                    .attr("stroke", d => colorPalette[d.cluster % colorPalette.length])
+                    .attr("stroke-width", 2)
+                    .style("opacity", 0.8)
+                    .transition().duration(isAutoRunning ? 100 : 300)
+                    .style("opacity", 0).remove();
+
+                drawPoints();
+                setTimeout(assignNextBatch, isAutoRunning ? 20 : 60);
+            }
+            assignNextBatch();
+        }
+
+        window.stepUpdate = function() {
+            state = 'computing';
+            updateUIState();
+
+            // Calculate new positions
+            let emptyClusters = false;
+            let targetCentroids = [];
+            
+            for(let i=0; i<K; i++) {
+                const assigned = dataset.filter(d => d.cluster === i);
+                if (assigned.length > 0) {
+                    targetCentroids.push({
+                        id: `c${i}`, 
+                        x: d3.mean(assigned, d => d.x), 
+                        y: d3.mean(assigned, d => d.y), 
+                        cIdx: i
+                    });
+                } else {
+                    emptyClusters = true;
+                    // Handle empty cluster by keeping it where it is, or spawning random
+                    if (centroids.length > i && centroids[i]) {
+                        targetCentroids.push({...centroids[i]}); 
+                    } else {
+                        const randPt = dataset[Math.floor(Math.random() * dataset.length)];
+                        targetCentroids.push({ id: `c${i}`, x: randPt.x, y: randPt.y, cIdx: i });
+                    }
+                }
+            }
+
+            centroids = targetCentroids;
+            
+            // Animate to new positions
+            drawCentroids();
+            calcWCSS();
+            
+            iteration++;
+            state = 'updated';
+            updateUIState();
+
+            if(isAutoRunning) {
+                setTimeout(window.stepAssign, 600);
+            }
+        }
+
+        window.autoRun = function() {
+            if (isAutoRunning) {
+                toggleAutoRun();
+            } else {
+                if (state === 'manual_picking') {
+                    alert("Please finish placing all centroids manually on the canvas before starting Auto-Run.");
+                    return;
+                }
+
+                isAutoRunning = true;
+                const btn = document.getElementById('btn-autorun');
+                btn.innerHTML = '<i data-lucide="pause" class="w-4 h-4"></i> Pause Simulation';
+                btn.className = "w-full py-3 bg-slate-800 text-white hover:bg-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2";
+                lucide.createIcons();
+                
+                if (state === 'idle') {
+                    stepInit();
+                    // Kickstart the sequence if not manual picking
+                    if (initMode !== 'manual') {
+                        setTimeout(() => {
+                            if (state === 'assigned') stepUpdate();
+                            else if (state === 'initialized') stepAssign();
+                        }, 600);
+                    }
+                } else {
+                    // Kickstart the cycle depending on current state
+                    if (state === 'initialized' || state === 'updated') {
+                        stepAssign();
+                    } else if (state === 'assigned') {
+                        stepUpdate();
+                    }
+                }
+            }
+        }
+
+        function toggleAutoRun() {
+            isAutoRunning = false;
+            const btn = document.getElementById('btn-autorun');
+            btn.innerHTML = '<i data-lucide="fast-forward" class="w-4 h-4"></i> Auto-Run to Convergence';
+            btn.className = "w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_4px_15px_rgba(59,130,246,0.3)] flex items-center justify-center gap-2";
+            lucide.createIcons();
+            updateUIState();
+        }
+
+        // --- MATH & UI ---
+        function calcWCSS() {
+            if (state === 'idle' || centroids.length === 0) return;
+            let wcss = 0;
+            dataset.forEach(d => {
+                if (d.cluster !== null) {
+                    const c = centroids.find(cen => cen.cIdx === d.cluster);
+                    if(c) wcss += (d.x - c.x)**2 + (d.y - c.y)**2;
+                }
+            });
+            document.getElementById('wcss-val').innerText = (wcss / 1000).toFixed(1) + "k";
+        }
+
+        function updateUIState() {
+            const b1 = document.getElementById('btn-step1');
+            const b2 = document.getElementById('btn-step2');
+            const b3 = document.getElementById('btn-step3');
+            const badge = document.getElementById('status-badge');
+            
+            b1.className = "step-btn"; b2.className = "step-btn"; b3.className = "step-btn";
+            b1.disabled = true; b2.disabled = true; b3.disabled = true;
+
+            if (isAutoRunning) {
+                badge.innerText = "Status: Auto-Running...";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-blue-500/20 text-blue-400 border-blue-500/50 px-3 py-1.5 rounded-lg border";
+                return;
+            }
+
+            if (state === 'idle') {
+                b1.disabled = false; b1.classList.add('active');
+                badge.innerText = "Status: Awaiting Initialization";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-slate-800 text-slate-400 px-3 py-1.5 rounded-lg border border-white/5";
+            } else if (state === 'manual_picking') {
+                b1.disabled = false; 
+                badge.innerText = `Status: Click map to place centroid (${centroids.length}/${K})`;
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-orange-500/20 text-orange-400 border-orange-500/50 px-3 py-1.5 rounded-lg border animate-pulse";
+            } else if (state === 'initialized' || state === 'updated') {
+                b1.disabled = false;
+                b3.disabled = false; b3.classList.add('active'); // Need to Assign points
+                badge.innerText = "Status: Ready to Assign Points";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-emerald-500/20 text-emerald-400 border-emerald-500/50 px-3 py-1.5 rounded-lg border";
+            } else if (state === 'assigned') {
+                b1.disabled = false;
+                b2.disabled = false; b2.classList.add('active'); // Need to Compute Centroids
+                badge.innerText = "Status: Ready to Compute Centroids";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-orange-500/20 text-orange-400 border-orange-500/50 px-3 py-1.5 rounded-lg border";
+            } else if (state === 'assigning') {
+                badge.innerText = "Status: Calculating Distances...";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-purple-500/20 text-purple-400 border-purple-500/50 px-3 py-1.5 rounded-lg border animate-pulse";
+            } else if (state === 'computing') {
+                badge.innerText = "Status: Moving Centroids...";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-yellow-500/20 text-yellow-400 border-yellow-500/50 px-3 py-1.5 rounded-lg border animate-pulse";
+            } else if (state === 'converged') {
+                b1.disabled = false; b1.classList.add('active');
+                badge.innerText = "Status: Converged!";
+                badge.className = "text-[9px] font-bold uppercase tracking-widest bg-[--lu-gold] text-black border-[--lu-gold] px-3 py-1.5 rounded-lg border shadow-[0_0_10px_rgba(181,162,108,0.5)]";
+                
+                const conv = document.getElementById('conv-val');
+                conv.innerText = "Yes";
+                conv.className = "text-xl font-mono font-bold text-[--emerald]";
+            }
+
+            document.getElementById('iter-val').innerText = iteration;
+        }
+
+        // --- DRAWING ---
+        function drawPoints() {
+            const pts = pointsGroup.selectAll(".data-point").data(dataset, d => d.id);
+            
+            const ptsEnter = pts.enter()
+                .append("circle")
+                .attr("class", "data-point unassigned")
+                .attr("r", 4)
+                .attr("cx", d => xScale(d.x))
+                .attr("cy", d => yScale(d.y))
+                .on("mouseover", handleHover)
+                .on("mousemove", moveHover)
+                .on("mouseout", clearHover);
+
+            const merged = pts.merge(ptsEnter);
+            
+            // Instantly update class attribute to allow CSS to transition color smoothly
+            merged.attr("class", d => `data-point ${d.cluster !== null ? 'c' + (d.cluster % colorPalette.length) : 'unassigned'}`);
+
+            // Transition position (will be noticeable when switching dataset shapes)
+            merged.transition().duration(500)
+                .attr("cx", d => xScale(d.x))
+                .attr("cy", d => yScale(d.y));
+                
+            pts.exit().remove();
+        }
+
+        function drawCentroids() {
+            const cents = centroidsGroup.selectAll(".centroid-mark").data(centroids, d => d.id);
+            
+            const sym = d3.symbol().type(d3.symbolCross).size(200);
+
+            cents.enter().append("path")
+                .attr("class", d => `centroid-mark c${d.cIdx % colorPalette.length}`)
+                .attr("d", sym)
+                .attr("transform", d => `translate(${xScale(d.x)}, ${yScale(d.y)}) scale(0)`)
+                .merge(cents)
+                .transition().duration(isAutoRunning ? 400 : 800).ease(d3.easeCubicOut)
+                .attr("transform", d => `translate(${xScale(d.x)}, ${yScale(d.y)}) scale(1)`);
+
+            cents.exit().transition().duration(300).attr("transform", d => `translate(${xScale(d.x)}, ${yScale(d.y)}) scale(0)`).remove();
+        }
+
+        // --- HOVER MATH HUD ---
+        function handleHover(event, d) {
+            if(state === 'idle' || state === 'manual_picking' || centroids.length === 0 || isAutoRunning || state === 'assigning' || state === 'computing') return;
+            
+            const hud = document.getElementById('math-hud');
+            const hudList = document.getElementById('hud-distances');
+            
+            document.getElementById('hud-pt').innerText = `(${d.x.toFixed(1)}, ${d.y.toFixed(1)})`;
+            
+            let htmlStr = '';
+            let minDist = Infinity;
+            let minCIdx = -1;
+
+            // Calculate all distances
+            centroids.forEach(c => {
+                const distSq = (d.x - c.x)**2 + (d.y - c.y)**2;
+                const dist = Math.sqrt(distSq);
+                if(dist < minDist) { minDist = dist; minCIdx = c.cIdx; }
+                
+                // Draw temporary measuring lines
+                linesGroup.append("line")
+                    .attr("class", `hover-line c${c.cIdx % colorPalette.length} pointer-events-none`)
+                    .attr("x1", xScale(d.x)).attr("y1", yScale(d.y))
+                    .attr("x2", xScale(c.x)).attr("y2", yScale(c.y))
+                    .attr("stroke-width", 1.5).attr("stroke-dasharray", "4,4").style("opacity", 0.8);
+            });
+
+            // Highlight the winner line safely
+            if (minCIdx !== -1) {
+                const winnerCentroid = centroids.find(c => c.cIdx === minCIdx);
+                if (winnerCentroid) {
+                    linesGroup.append("line")
+                        .attr("class", `hover-line dist-line-winner c${minCIdx % colorPalette.length} pointer-events-none`)
+                        .attr("x1", xScale(d.x)).attr("y1", yScale(d.y))
+                        .attr("x2", xScale(winnerCentroid.x)).attr("y2", yScale(winnerCentroid.y));
+                }
+            }
+
+            // Build HUD HTML
+            centroids.forEach(c => {
+                const dist = Math.sqrt((d.x - c.x)**2 + (d.y - c.y)**2);
+                const isWinner = c.cIdx === minCIdx;
+                const color = colorPalette[c.cIdx % colorPalette.length];
+                htmlStr += `
+                    <div class="flex justify-between items-center p-1.5 rounded ${isWinner ? 'bg-white/10 border border-white/20' : ''}">
+                        <span style="color: ${color}; font-weight: ${isWinner ? 'bold' : 'normal'}">Centroid ${c.cIdx}:</span>
+                        <span class="text-white ${isWinner ? 'font-bold' : ''}">${dist.toFixed(2)}</span>
+                    </div>
+                `;
+            });
+
+            hudList.innerHTML = htmlStr;
+            hud.classList.add('visible');
+            moveHover(event);
+        }
+
+        function moveHover(event) {
+            const hud = document.getElementById('math-hud');
+            // Check boundaries so it doesn't clip off screen
+            let top = event.pageY - 100;
+            let left = event.pageX + 20;
+            hud.style.top = top + 'px';
+            hud.style.left = left + 'px';
+        }
+
+        function clearHover() {
+            document.getElementById('math-hud').classList.remove('visible');
+            linesGroup.selectAll(".hover-line").remove();
+        }
+
+        // Init
+        window.onload = () => {
+            initD3();
+            generateData('blobs');
+            window.addEventListener('resize', () => {
+                initD3();
+                drawPoints();
+                drawCentroids();
+            });
+        };
+    </script>
+</body>
+</html>
